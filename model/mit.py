@@ -422,7 +422,7 @@ class mit_b1(MixVisionTransformer):
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
-            print("Load backbone weights")
+            print("Load backbone weights MiT-b1")
             # self.load_state_dict(torch.load(pretrained), strict=False)
             # TODO: change pretrained path
             self.load_state_dict(torch.load(r"C:\Users\xyli45\Desktop\fyp\pretrained\segformer_b1_backbone_weights.pth"), strict=False)
@@ -434,7 +434,7 @@ class mit_b2(MixVisionTransformer):
             qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1],
             drop_rate=0.0, drop_path_rate=0.1)
         if pretrained:
-            print("Load backbone weights")
+            print("Load backbone weights MiT-b2")
             # self.load_state_dict(torch.load(pretrained), strict=False)
             # TODO: change pretrained path
             self.load_state_dict(torch.load(r"C:\Users\xyli45\Desktop\fyp\pretrained\segformer.b2.1024x1024.city.160k.pth"), strict=False)

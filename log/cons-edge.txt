@@ -1,0 +1,7 @@
+Smeasure: 0.563
+, MeanEm: 0.639
+, WeightedFmeasure: 0.188
+, MAE: 0.019
+, BoundaryMAE: 0.119
+, BoundaryWeightedFmeasure: 0.319
+

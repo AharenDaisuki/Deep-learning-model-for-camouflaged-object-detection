@@ -1,0 +1,4 @@
+cons-edge
+flops: 20.183422056 G, MACs: 40.366844112 G, params: 26.517232 M
+Inference time: 25.230255126953125 ms, FPS: 39
+

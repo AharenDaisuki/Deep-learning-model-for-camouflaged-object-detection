@@ -12,6 +12,16 @@ from utils.my_utils import resize, split_batches
 from utils.vis_utils import vis_feature_map
 
 
+class Backbone_S(nn.Module):
+    def __init__(self, pretrained=True):
+        super(Backbone_S, self).__init__()
+        # TODO: pretrained path
+        self.backbone = mit_b1(pretrained=pretrained)
+
+    def forward(self, x):
+        x = self.backbone(x)
+        return x
+
 class Backbone(nn.Module):
     def __init__(self, pretrained=True):
         super(Backbone, self).__init__()
@@ -324,14 +334,145 @@ class LinearEmbedding(nn.Module):
         x = self.proj(x)
         return x
     
+class Decoder(BaseDecodeHead):
+    def __init__(self, feature_strides, embedding_dim, visualization=False, **kwargs):
+        super(Decoder, self).__init__(input_transform='multiple_select', **kwargs) # TODO: input transform
+        assert len(feature_strides) == len(self.in_channels)
+        assert min(feature_strides) == feature_strides[0]
+        self.feature_strides = feature_strides
+        self.visualization = visualization
+
+        in_channels1, in_channels2, in_channels3, in_channels4 = self.in_channels # [64, 128, 320, 512]
+        
+        self.linear_embed4 = LinearEmbedding(input_dim=in_channels4, embed_dim=embedding_dim) # 256
+        self.linear_embed3 = LinearEmbedding(input_dim=in_channels3, embed_dim=embedding_dim)
+        self.linear_embed2 = LinearEmbedding(input_dim=in_channels2, embed_dim=embedding_dim)
+        self.linear_embed1 = LinearEmbedding(input_dim=in_channels1, embed_dim=embedding_dim)
+
+        self.linear_fuse = ConvModule(
+            in_channels=embedding_dim * 4,
+            out_channels=embedding_dim,
+            kernel_size=1,
+            norm_cfg=dict(type='BN', requires_grad=True)
+        )
+        # self.intra_fuse = IntraFusion(channels_in = embedding_dim, channels_out = embedding_dim // 2)
+
+        self.linear = nn.Conv2d(embedding_dim, self.num_classes, kernel_size=1)
+
+        self.stage1 = Fusion(channels=in_channels1, r=in_channels1 // 16, fusion_method='aff')
+        self.stage2 = Fusion(channels=in_channels2, r=in_channels2 // 16, fusion_method='aff')
+        self.stage3 = Fusion(channels=in_channels3, r=in_channels3 // 16, fusion_method='aff')
+        self.stage4 = Fusion(channels=in_channels4, r=in_channels4 // 16, fusion_method='aff')
+
+    def forward(self, inputs):
+        x = self._transform_inputs(inputs)  # 1/4, 1/8, 1/16, 1/32
+        x1, x2, x3, x4 = x
+        im1, fw1 = split_batches(x1)
+        im2, fw2 = split_batches(x2)
+        im3, fw3 = split_batches(x3)
+        im4, fw4 = split_batches(x4)
+
+        n, _, h, w = im1.shape
+        
+        f1 = self.stage1(im1, fw1)
+        f2 = self.stage2(im2, fw2)
+        f3 = self.stage3(im3, fw3)
+        f4 = self.stage4(im4, fw4)
+        
+        f1_ = self.linear_embed1(f1).permute(0, 2, 1).reshape(n, -1, f1.shape[2], f1.shape[3])
+        f2_ = self.linear_embed2(f2).permute(0, 2, 1).reshape(n, -1, f2.shape[2], f2.shape[3])
+        f3_ = self.linear_embed3(f3).permute(0, 2, 1).reshape(n, -1, f3.shape[2], f3.shape[3])
+        f4_ = self.linear_embed4(f4).permute(0, 2, 1).reshape(n, -1, f4.shape[2], f4.shape[3])
+
+        f2_ = resize(f2_, size=im1.size()[2:], mode='bilinear', align_corners=False)
+        f3_ = resize(f3_, size=im1.size()[2:], mode='bilinear', align_corners=False)
+        f4_ = resize(f4_, size=im1.size()[2:], mode='bilinear', align_corners=False)
+        
+        # TODO: visualization
+        if self.visualization: 
+            vis_feature_map(f1_.cpu(), title=f'af f1')
+            vis_feature_map(f2_.cpu(), title=f'af f2')
+            vis_feature_map(f3_.cpu(), title=f'af f3')
+            vis_feature_map(f4_.cpu(), title=f'af f4')
+
+        f_ = self.linear_fuse(torch.cat([f4_, f3_, f2_, f1_], dim=1)) # TODO: intra-attention
+        f = self.dropout(f_)
+        f = self.linear(f)
+        return f
+    
+class Decoder_V1(BaseDecodeHead):
+    def __init__(self, feature_strides, embedding_dim, visualization=False, **kwargs):
+        super(Decoder_V1, self).__init__(input_transform='multiple_select', **kwargs) # TODO: input transform
+        assert len(feature_strides) == len(self.in_channels)
+        assert min(feature_strides) == feature_strides[0]
+        self.feature_strides = feature_strides
+        self.visualization = visualization
+
+        in_channels1, in_channels2, in_channels3, in_channels4 = self.in_channels # [64, 128, 320, 512]
+        
+        self.linear_embed4 = LinearEmbedding(input_dim=in_channels4, embed_dim=embedding_dim) # 256
+        self.linear_embed3 = LinearEmbedding(input_dim=in_channels3, embed_dim=embedding_dim)
+        self.linear_embed2 = LinearEmbedding(input_dim=in_channels2, embed_dim=embedding_dim)
+        self.linear_embed1 = LinearEmbedding(input_dim=in_channels1, embed_dim=embedding_dim)
+
+        self.linear_fuse = ConvModule(
+            in_channels=embedding_dim * 4,
+            out_channels=embedding_dim,
+            kernel_size=1,
+            norm_cfg=dict(type='BN', requires_grad=True)
+        )
+        # self.intra_fuse = IntraFusion(channels_in = embedding_dim, channels_out = embedding_dim // 2)
+
+        self.linear = nn.Conv2d(embedding_dim, self.num_classes, kernel_size=1)
+
+        self.stage1 = Fusion(channels=in_channels1, r=in_channels1 // 16, fusion_method='iaff')
+        self.stage2 = Fusion(channels=in_channels2, r=in_channels2 // 16, fusion_method='iaff')
+        self.stage3 = Fusion(channels=in_channels3, r=in_channels3 // 16, fusion_method='iaff')
+        self.stage4 = Fusion(channels=in_channels4, r=in_channels4 // 16, fusion_method='iaff')
+
+    def forward(self, inputs):
+        x = self._transform_inputs(inputs)  # 1/4, 1/8, 1/16, 1/32
+        x1, x2, x3, x4 = x
+        im1, fw1 = split_batches(x1)
+        im2, fw2 = split_batches(x2)
+        im3, fw3 = split_batches(x3)
+        im4, fw4 = split_batches(x4)
+
+        n, _, h, w = im1.shape
+        
+        f1 = self.stage1(im1, fw1)
+        f2 = self.stage2(im2, fw2)
+        f3 = self.stage3(im3, fw3)
+        f4 = self.stage4(im4, fw4)
+        
+        f1_ = self.linear_embed1(f1).permute(0, 2, 1).reshape(n, -1, f1.shape[2], f1.shape[3])
+        f2_ = self.linear_embed2(f2).permute(0, 2, 1).reshape(n, -1, f2.shape[2], f2.shape[3])
+        f3_ = self.linear_embed3(f3).permute(0, 2, 1).reshape(n, -1, f3.shape[2], f3.shape[3])
+        f4_ = self.linear_embed4(f4).permute(0, 2, 1).reshape(n, -1, f4.shape[2], f4.shape[3])
+
+        f2_ = resize(f2_, size=im1.size()[2:], mode='bilinear', align_corners=False)
+        f3_ = resize(f3_, size=im1.size()[2:], mode='bilinear', align_corners=False)
+        f4_ = resize(f4_, size=im1.size()[2:], mode='bilinear', align_corners=False)
+        
+        # TODO: visualization
+        if self.visualization: 
+            vis_feature_map(f1_.cpu(), title=f'af f1')
+            vis_feature_map(f2_.cpu(), title=f'af f2')
+            vis_feature_map(f3_.cpu(), title=f'af f3')
+            vis_feature_map(f4_.cpu(), title=f'af f4')
+
+        f_ = self.linear_fuse(torch.cat([f4_, f3_, f2_, f1_], dim=1)) # TODO: intra-attention
+        f = self.dropout(f_)
+        f = self.linear(f)
+        return f
+    
 class Decoder_V2(BaseDecodeHead):
-    def __init__(self, feature_strides, embedding_dim, visualization=False, method='intra', **kwargs):
+    def __init__(self, feature_strides, embedding_dim, visualization=False, **kwargs):
         super(Decoder_V2, self).__init__(input_transform='multiple_select', **kwargs) # TODO: input transform
         assert len(feature_strides) == len(self.in_channels)
         assert min(feature_strides) == feature_strides[0]
         self.feature_strides = feature_strides
         self.visualization = visualization
-        self.method = method
 
         in_channels1, in_channels2, in_channels3, in_channels4 = self.in_channels # [64, 128, 320, 512]
         
@@ -392,29 +533,144 @@ class Decoder_V2(BaseDecodeHead):
         f = self.dropout(f_)
         f = self.linear(f)
         return f, edges
-        
-        # if self.method == 'linear':
-        #     f_ = self.linear_fuse(torch.cat([f4_, f3_, f2_, f1_], dim=1)) 
+    
+class Net_V1(nn.Module):
+    def __init__(self, visualization=False, edge=False):
+        super(Net_V1, self).__init__()
+        self.visualization = visualization
+        self.edge = edge
+        # encoder
+        self.encoder = Backbone(pretrained=True)
+        # decoder TODO: modify parameters
+        self.decoder = Decoder(
+            embedding_dim = 256, 
+            visualization = self.visualization, 
+            feature_strides = [4, 8, 16, 32], 
+            in_index=[0, 1, 2, 3],
+            in_channels = [64, 128, 320, 512],
+            channels = 128, 
+            dropout_ratio = 0.2, # dropout
+            num_classes = 2,  
+            out_channels = 1,
+            threshold = 0.3, 
+            align_corners=False,
+            loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, avg_non_ignore=True)
+        ) 
 
-        #     if self.visualization: 
-        #         vis_feature_map(f_.cpu(), title=f'af f')
-            
-        #     f = self.dropout(f_)
-        #     f = self.linear(f)
-        #     return f
-        # elif self.method == 'intra':
-        #     f_, edges = self.intra_fuse([f4_, f3_, f2_, f1_]) 
         
-        #     if self.visualization: 
-        #         for idx, edge in enumerate(edges):
-        #             vis_feature_map(edge.cpu(), title=f'edge {idx}', policy='first')
-        #         vis_feature_map(f_.cpu(), title=f'af f')
+    def forward(self, img, flow):
+        '''
+        img1: [B, C, H, W]
+        img2: [B, C, H, W]
+        flow: [B, C, H, W]
+        '''
+        rgb_fw = torch.cat([img, flow], dim=0)
+        # encode
+        features = self.encoder(rgb_fw)
         
-        #     f = self.dropout(f_)
-        #     f = self.linear(f)
-        #     return f, edges
-        # else:
-        #     assert False, 'Fusion method not implemented!'
+        if self.visualization:      
+            for idx, f in enumerate(features):
+                vis_feature_map(f.cpu(), title=f'bf {idx}')
+        
+        # decode
+        if self.edge:
+            x, edges = self.decoder(features)
+            return x, edges
+        else:
+            x = self.decoder(features)
+            return x
+        
+class Net_V2(nn.Module):
+    def __init__(self, visualization=False, edge=False):
+        super(Net_V2, self).__init__()
+        self.visualization = visualization
+        self.edge = edge
+        # encoder
+        self.encoder = Backbone(pretrained=True)
+        # decoder TODO: modify parameters
+        self.decoder = Decoder_V1(
+            embedding_dim = 256, 
+            visualization = self.visualization, 
+            feature_strides = [4, 8, 16, 32], 
+            in_index=[0, 1, 2, 3],
+            in_channels = [64, 128, 320, 512],
+            channels = 128, 
+            dropout_ratio = 0.2, # dropout
+            num_classes = 2,  
+            out_channels = 1,
+            threshold = 0.3, 
+            align_corners=False,
+            loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, avg_non_ignore=True)
+        ) 
+
+        
+    def forward(self, img, flow):
+        '''
+        img1: [B, C, H, W]
+        img2: [B, C, H, W]
+        flow: [B, C, H, W]
+        '''
+        rgb_fw = torch.cat([img, flow], dim=0)
+        # encode
+        features = self.encoder(rgb_fw)
+        
+        if self.visualization:      
+            for idx, f in enumerate(features):
+                vis_feature_map(f.cpu(), title=f'bf {idx}')
+        
+        # decode
+        if self.edge:
+            x, edges = self.decoder(features)
+            return x, edges
+        else:
+            x = self.decoder(features)
+            return x
+
+class Net_V3_S(nn.Module):
+    def __init__(self, visualization=False, edge=True):
+        super(Net_V3_S, self).__init__()
+        self.visualization = visualization
+        self.edge = edge
+        # encoder
+        self.encoder = Backbone_S(pretrained=True)
+        # decoder TODO: modify parameters
+        self.decoder = Decoder_V2(
+            embedding_dim = 256, 
+            visualization = self.visualization, 
+            feature_strides = [4, 8, 16, 32], 
+            in_index=[0, 1, 2, 3],
+            in_channels = [64, 128, 320, 512],
+            channels = 128, 
+            dropout_ratio = 0.2, # dropout
+            num_classes = 2,  
+            out_channels = 1,
+            threshold = 0.3, 
+            align_corners=False,
+            loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, avg_non_ignore=True)
+        ) 
+
+        
+    def forward(self, img, flow):
+        '''
+        img1: [B, C, H, W]
+        img2: [B, C, H, W]
+        flow: [B, C, H, W]
+        '''
+        rgb_fw = torch.cat([img, flow], dim=0)
+        # encode
+        features = self.encoder(rgb_fw)
+        
+        if self.visualization:      
+            for idx, f in enumerate(features):
+                vis_feature_map(f.cpu(), title=f'bf {idx}')
+        
+        # decode
+        if self.edge:
+            x, edges = self.decoder(features)
+            return x, edges
+        else:
+            x = self.decoder(features)
+            return x
 
 class Net_V3(nn.Module):
     def __init__(self, visualization=False, edge=True):
@@ -427,7 +683,6 @@ class Net_V3(nn.Module):
         self.decoder = Decoder_V2(
             embedding_dim = 256, 
             visualization = self.visualization, 
-            method = 'intra' if edge else 'linear', 
             feature_strides = [4, 8, 16, 32], 
             in_index=[0, 1, 2, 3],
             in_channels = [64, 128, 320, 512],
