@@ -108,71 +108,6 @@ def train(args, model):
                         'mask loss2': '{:.5f}'.format(loss2.item())
                     })
                 pbar.update()
-        # set 2
-        step_n = len(val_loader)
-        with tqdm(total=step_n) as pbar:
-            for idx, (image1, image2, flow, mask, meta_info) in enumerate(val_loader):
-                image1 = image1.to(device) # [B, C, H, W]
-                image2 = image2.to(device) # [B, C, H, W]
-                flow = flow.to(device) # [B, C, H, W]
-                mask = mask.to(device) # [B, 1, H, W]
-                edge = mask2edge(mask) # [b, 1, H, W] 
-                # mask = torch.squeeze(mask, 1) # [B, H, W]
-                # clean
-                optimizer.zero_grad()
-                # forward
-                if args.loss == 'cons+edge' or args.loss == 'edge':
-                    pred1, edges1 = model(image1, flow)
-                    pred2, edges2 = model(image2, flow)
-                else:
-                    # TODO: no edge
-                    pred1 = model(image1, flow)
-                    pred2 = model(image2, flow)
-                
-                pred1 = resize(pred1, size=mask.shape[2:], mode='bilinear', align_corners=False)
-                pred2 = resize(pred2, size=mask.shape[2:], mode='bilinear', align_corners=False)
-                loss1 = hybrid_loss(pred1[:,:1,:,:], mask.float())
-                loss2 = hybrid_loss(pred2[:,:1,:,:], mask.float())
-
-                if args.loss == 'cons+edge' or args.loss == 'edge':
-                    loss_edge1, loss_edge2 = 0.0, 0.0 
-                    for i in edges1:
-                        i = resize(i, size=edge.shape[2:], mode='bilinear', align_corners=False)
-                        loss_edge1 += hybrid_loss(i, edge)
-                    for i in edges2:
-                        i = resize(i, size=edge.shape[2:], mode='bilinear', align_corners=False) 
-                        loss_edge2 += hybrid_loss(i, edge)
-                
-                if args.loss == 'cons+edge':
-                    loss = 0.495 * loss1 + 0.495 * loss2 + 0.005 * loss_edge1 + 0.005 * loss_edge2
-                elif args.loss == 'cons':
-                    loss = 0.5 * loss1 + 0.5 * loss2
-                elif args.loss == 'edge':
-                    loss = 0.99 * loss1 + 0.01 * loss_edge1
-                else:
-                    loss = loss1
-                # backpropagate
-                loss.backward()
-                optimizer.step()
-                # statistics
-                assert not math.isnan(loss.item())
-                tmp_losses.append(loss.item())
-                pbar.set_description(f'epoch ({epoch}/{max_epoch})')
-                if args.loss == 'cons+edge' or args.loss == 'edge':
-                    pbar.set_postfix({
-                        'train loss': '{:.5f}'.format(loss.item()),
-                        'mask loss1': '{:.5f}'.format(loss1.item()), 
-                        'mask loss2': '{:.5f}'.format(loss2.item()), 
-                        'edge loss1': '{:.5f}'.format(loss_edge1.item()), 
-                        'edge loss2': '{:.5f}'.format(loss_edge2.item()),
-                    })
-                else:
-                    pbar.set_postfix({
-                        'train loss': '{:.5f}'.format(loss.item()),
-                        'mask loss1': '{:.5f}'.format(loss1.item()), 
-                        'mask loss2': '{:.5f}'.format(loss2.item())
-                    })
-                pbar.update()
 
         train_loss = np.mean(tmp_losses)
         train_losses.append(train_loss)
@@ -252,5 +187,5 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, help='dataset path')
     parser.add_argument('--loss', type=str, default='cons+edge', help='loss type')
     args = parser.parse_args()
-    model = Net_V2().cuda() # TODO: change model [Net_V3, Net_V3_S, Net_V1, Net_V2]
+    model = Net_V3().cuda() # TODO: change model [Net_V3, Net_V3_S, Net_V1, Net_V2]
     train(args, model)
