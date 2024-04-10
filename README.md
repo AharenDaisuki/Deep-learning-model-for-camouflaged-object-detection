@@ -26,7 +26,7 @@ Our model is implemented in [PyTorch](https://github.com/pytorch/pytorch) framew
 
 **1. Download Datasets**
 
-Download via this [link](https://drive.google.com/file/d/1a7ESYE30q5MHsmrfTasNEOsbjdpZdgz5/view). Highly based on [MoCA-Mask](https://github.com/XuelianCheng/SLT-Net?tab=readme-ov-file), we make some minor modifications in order to make it adapt to the pipeline of our proposed framework: 
+Download via this [link](https://drive.google.com/file/d/1Y53kXm412YUT9fpVzvirwHDWLTHq_yjp/view?usp=sharing). Highly based on [MoCA-Mask](https://github.com/XuelianCheng/SLT-Net?tab=readme-ov-file), we make some minor modifications in order to make it adapt to the pipeline of our proposed framework: 
 
 * Add Optical Flow Data. For every two consecutive frames, we use [RAFT](https://github.com/princeton-vl/RAFT) to generate their corresponding optical flow data as auxiliary input. The additional optical flow data includes 22852 images in JPG format for 87 videos in total.
 
@@ -49,16 +49,23 @@ You can also download our model checkpoints via this [link](https://drive.google
 
 **3. Environment**
 
-Create a virtual environment and activate it. 
+
+Before following the below instructions, please make sure you have properly installed Conda.You can download our packed virtual environment via this [link](). 
+
+Go to your conda environments directory, create a new directory for your virtual environment: 
 
 ```
-conda create -n myconda
-conda activate myconda
+mkdir myenv
 ```
 
-Our implementation is tested with Cuda 11.7 and Pytorch 2.0.1. Please refer to Pytorch offcial tutorial [[Get Started](https://pytorch.org/get-started/locally/)] to start locally. 
+Extract all: 
+```
+tar -xzf fyp.tar.gz -C myenv
 ```
 
+Activate your environment: 
+```
+conda activate myenv
 ```
 
 ## 3. Results

@@ -425,7 +425,7 @@ class mit_b1(MixVisionTransformer):
             print("Load backbone weights MiT-b1")
             # self.load_state_dict(torch.load(pretrained), strict=False)
             # TODO: change pretrained path
-            self.load_state_dict(torch.load(r"C:\Users\xyli45\Desktop\fyp\pretrained\segformer_b1_backbone_weights.pth"), strict=False)
+            self.load_state_dict(torch.load(r"C:\Users\xyli45\Desktop\fyp\pretrained\MiT-b1.pth"), strict=False)
 
 class mit_b2(MixVisionTransformer):
     def __init__(self, pretrained = None):
@@ -437,7 +437,7 @@ class mit_b2(MixVisionTransformer):
             print("Load backbone weights MiT-b2")
             # self.load_state_dict(torch.load(pretrained), strict=False)
             # TODO: change pretrained path
-            self.load_state_dict(torch.load(r"C:\Users\xyli45\Desktop\fyp\pretrained\segformer.b2.1024x1024.city.160k.pth"), strict=False)
+            self.load_state_dict(torch.load(r"C:\Users\xyli45\Desktop\fyp\pretrained\MiT-b2.pth"), strict=False)
 
 # class mit_b3(MixVisionTransformer):
 #     def __init__(self, pretrained = False):
