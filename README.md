@@ -50,7 +50,7 @@ You can also download our model checkpoints via this [link](https://drive.google
 **3. Environment**
 
 
-Before following the below instructions, please make sure you have properly installed Conda.You can download our packed virtual environment via this [link](). 
+Before following the below instructions, please make sure you have properly installed Conda. You can download our packed virtual environment via this [link](https://drive.google.com/file/d/1Xkq4UDedSRCQESnMIazfkiB8XysnXC-X/view?usp=sharing). 
 
 Go to your conda environments directory, create a new directory for your virtual environment: 
 
